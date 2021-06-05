@@ -517,10 +517,10 @@ create_adaptative_mcts() créé un bot qui se donne autant de temps que son advers
  
  
 
- start_game [|Human; Human|] (* local multiplayer*);;
+(*start_game [|Human; Human|]*) (* local multiplayer*);;
 start_game [|Human; create_adaptative_mcts()|] (* Human VS adaptative AI*);;
- start_game [|Human; create_mcts_player 2.|] (* Human VS AI *);;
-start_game [|create_mcts_player 2.;create_mcts_player 10.|] (* fast AI versus slow AI *) ;;
+(*start_game [|Human; create_mcts_player 2.|]*) (* Human VS AI *);;
+(*start_game [|create_mcts_player 2.;create_mcts_player 10.|]*) (* fast AI versus slow AI *) ;;
 
 
 
