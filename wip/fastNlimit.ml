@@ -35,7 +35,7 @@ let resetMct() =
         mapiInPlace (fun j _ -> gameArray.(i).(j)) mctArray.(i)
     done
 in
-
+(**[getActions turn board]*)
 let getActions turn board =
     let res = ref @@ if turn = 1 then [-2] else [] in
     for i = 0 to 8 do
@@ -107,26 +107,51 @@ let check arr i j player =
         else (assert(depth<=4); depth=4)
     in List.fold_left (fun acc dir -> acc || aux dir i j 0 true) false tests
 in
+
+(**[performAction arr player action]*)
 let performAction arr player = function
     | -2 -> begin
                 try (replace arr; false) with  _ -> failwith "replace failed"
             end
     | (j:int) -> try (let i = add arr player j in check arr i j player;) with Invalid_argument e -> raise @@ Invalid_argument  ("add/check failed"^e)
 in
+let performCheckAction arr player = function
+    | -2 -> false
+    | j -> (let i = add arr player j in
+           let b = check arr i j player in
+           arr.(i).(j) <- -1; b)
+in
 
-
-let playout initTurn =
+let playout initTurn depth=
     try (
     let turn = ref initTurn in
     resetPlayout();
+    let win() = if initTurn mod 2 = !turn mod 2 then 0. else 1.
+    in
     let rec wh() = try (
-        let t = getRandomAction !turn playoutArray in
-        if performAction playoutArray (!turn mod 2) t then(
-            f (!turn mod 2)
-        ) else (
+        let player = !turn mod 2 in
+        let actions = getActions !turn playoutArray in
+        let rec auxW player = function
+            | x :: xs ->  if performCheckAction playoutArray player x then x else auxW player xs
+            | _ -> -66
+        in
+        if auxW player actions != -66 then win()
+        else (
+        let r = auxW (1 - player) actions in if r != -66 then (
+            (* à remplacer si remove *)
+            assert(not @@ performAction playoutArray player r);
             incr turn;
             wh()
         )
+        else (
+            if !turn > initTurn + depth then 0.5 else (
+            let t = getRandomAction !turn playoutArray in
+            assert(not @@ performAction playoutArray player t);
+            incr turn;
+            wh()
+            )
+        )
+    )
     ) with End_game -> 0.5
     in wh();) with Invalid_argument e -> raise @@ Invalid_argument ("playout failed"^e)
 in
@@ -156,7 +181,7 @@ let expend node =
             node.base.sons <- newN :: node.base.sons;
             if b then (
                 retropagation newN 1.
-            ) else retropagation newN @@ playout newN.base.turn
+            ) else retropagation newN @@ playout newN.base.turn 20
         | _ ->  raise End_game
 in
 let performActionNode arr = function
@@ -202,9 +227,8 @@ let mctSearch turn stopTime =
         select mcTree;
         debug := 1. +. !debug
     done;
-    prerr_endline "Root :";
-    debugNode mcTree;
-    prerr_endline "";
+    debugTree mcTree;
+    prerr_endline @@ Printf.sprintf "win rate : %.3f" @@ 1. -. mcTree.base.win /. mcTree.base.visit;
     begin
     match mcTree.base.sons with
         | x :: xs as l ->
@@ -222,7 +246,7 @@ let mctSearch turn stopTime =
             performAction gameArray myId action;
             ) with Invalid_argument e -> raise @@ Invalid_argument ("perform chosen node failed"^e)
             end;
-            action
+            action, !debug
 
         | _ -> failwith "no sons for root"
     end;
@@ -236,11 +260,8 @@ while true do
     let t = Sys.time () in
     let turnindex = int_of_string (input_line stdin) in (* starts from 0; As the game progresses, first player gets [0,2,4,...] and second player gets [1,3,5,...] *)
 
-    let testBoard = Array.make_matrix 7 9 (-1) in
     for i = 0 to 6 do
-        try (
-        testBoard.(6-i) <- convertRow @@ input_line stdin; (* one row of the board (from top to bottom) *)
-        ) with Invalid_argument _ -> failwith "bug found"
+        let _ = input_line stdin in ()(* one row of the board (from top to bottom) *)
      done;
 
     let numvalidactions = int_of_string (input_line stdin) in (* number of unfilled columns in the board *)
@@ -256,23 +277,15 @@ while true do
         in
         prerr_endline @@"turn : "^string_of_int turnindex;
     );
-
-    if testBoard <> gameArray then(
-        prerr_endline "__ Error, supposed board : __";
-        printGame testBoard;
-        prerr_endline "___ Actual board : ___";
-        printGame gameArray;
-        failwith "board failed"
-    );
     prerr_endline "starting mcts...";
 
 
-    let a = mctSearch turnindex (t +. 0.1) in
+    let a, d = mctSearch turnindex (t +. 0.1) in
     (* Write an action using print_endline *)
     (* To debug: prerr_endline "Debug message"; *)
 
 
     (* Output a column index to drop the chip in. Append message to show in the viewer. *)
-    print_endline @@ string_of_int a ^ " test";
+    print_endline @@ string_of_int a ^ Printf.sprintf " %.0f playouts !" d ;
     ();
 done;;
